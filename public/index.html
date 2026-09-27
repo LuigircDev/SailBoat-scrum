@@ -1,0 +1,759 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SailBoat Retro · Tablero Ágil de Retrospectivas Multiplayer</title>
+  <meta name="description" content="Tablero interactivo multiplayer en tiempo real para retrospectivas ágiles con la técnica del Velero (SailBoat). Viento, Sol, Ancla y Arrecifes.">
+  
+  <!-- Favicon -->
+  <link rel="icon" type="image/jpeg" href="assets/sailboat_logo.jpg">
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Caveat:wght@600;700&display=swap" rel="stylesheet">
+
+  <!-- Stylesheet -->
+  <link rel="stylesheet" href="style.css">
+
+  <!-- Confetti Library -->
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+  <!-- html2canvas for Board PNG Export -->
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <!-- Socket.io client (works with Node backend, falls back gracefully on static hosting) -->
+  <script src="/socket.io/socket.io.js" onerror="console.info('Modo estático/serverless detectado. Activando fallback WebRTC.')"></script>
+</head>
+<body class="theme-ocean">
+
+  <!-- ==========================================
+       PANTALLA 1: LOBBY DE INGRESO / SALAS
+       ========================================== -->
+  <div id="lobbyScreen" class="lobby-screen">
+    <div class="lobby-backdrop"></div>
+    <div class="lobby-card">
+      <div class="lobby-header">
+        <div class="logo-container">
+          <img src="assets/sailboat_logo.jpg" alt="SailBoat Retro Logo" class="brand-logo">
+          <div class="logo-badge">RETRO MULTIPLAYER</div>
+        </div>
+        <h1 class="lobby-title">SailBoat Retrospectiva</h1>
+        <p class="lobby-subtitle">Navegando juntos hacia la mejora continua de nuestro equipo</p>
+      </div>
+
+      <!-- Pestañas: Crear Sala o Unirse -->
+      <div class="lobby-tabs">
+        <button id="tabJoinBtn" class="tab-btn active" type="button">
+          <span>🚀 Unirse a una Sala</span>
+        </button>
+        <button id="tabCreateBtn" class="tab-btn" type="button">
+          <span>⛵ Crear Nueva Sala</span>
+        </button>
+      </div>
+
+      <!-- FORMULARIO 1: UNIRSE A SALA -->
+      <form id="joinRoomForm" class="lobby-form">
+        <div class="input-group">
+          <label for="joinUserName">Tu Nombre o Apodo</label>
+          <div class="input-wrapper">
+            <span class="input-icon">👤</span>
+            <input type="text" id="joinUserName" placeholder="Ej: Luigi, Juan, Scrum Master..." required autocomplete="name">
+          </div>
+        </div>
+
+        <div class="input-group">
+          <label for="joinRoomCode">Código de Sala</label>
+          <div class="input-wrapper">
+            <span class="input-icon">🔑</span>
+            <input type="text" id="joinRoomCode" placeholder="Ej: SPRINT-1 o EQUIPO-ALFA" required style="text-transform: uppercase;">
+          </div>
+          <small class="helper-text">Pídele el código al facilitador de la retro.</small>
+        </div>
+
+        <div class="input-group">
+          <label for="joinPasscode">PIN o Contraseña <span class="optional-badge">(Si la sala tiene clave)</span></label>
+          <div class="input-wrapper">
+            <span class="input-icon">🔒</span>
+            <input type="password" id="joinPasscode" placeholder="Opcional">
+          </div>
+        </div>
+
+        <div class="input-group">
+          <label>Color de tu Avatar y Cursores</label>
+          <div class="avatar-color-picker" id="joinColorPicker">
+            <!-- Colores dinámicos generados por JS -->
+          </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-block btn-lg" id="btnSubmitJoin">
+          <span>Entrar al Tablero</span>
+          <span class="btn-arrow">→</span>
+        </button>
+      </form>
+
+      <!-- FORMULARIO 2: CREAR SALA -->
+      <form id="createRoomForm" class="lobby-form hidden">
+        <div class="input-group">
+          <label for="createUserName">Tu Nombre (Facilitador)</label>
+          <div class="input-wrapper">
+            <span class="input-icon">👑</span>
+            <input type="text" id="createUserName" placeholder="Ej: Luigi (Scrum Master)" required>
+          </div>
+        </div>
+
+        <div class="grid-2-col">
+          <div class="input-group">
+            <label for="createRoomCode">Código de la Sala</label>
+            <div class="input-wrapper with-action">
+              <span class="input-icon">🏷️</span>
+              <input type="text" id="createRoomCode" placeholder="Ej: SPRINT-24" required style="text-transform: uppercase;">
+              <button type="button" class="btn-action-icon" id="btnGenRoomCode" title="Generar código aleatorio">🎲</button>
+            </div>
+          </div>
+
+          <div class="input-group">
+            <label for="createPasscode">PIN de Protección <span class="optional-badge">(Opcional)</span></label>
+            <div class="input-wrapper">
+              <span class="input-icon">🔒</span>
+              <input type="password" id="createPasscode" placeholder="Ej: 1234">
+            </div>
+          </div>
+        </div>
+
+        <div class="input-group">
+          <label for="createSprintName">Nombre del Sprint Inicial</label>
+          <div class="input-wrapper">
+            <span class="input-icon">⛵</span>
+            <input type="text" id="createSprintName" placeholder="Ej: Sprint 1 - MVP & Despliegue" value="Sprint 1">
+          </div>
+        </div>
+
+        <div class="input-group">
+          <label for="createSprintGoal">Objetivo del Sprint (Sprint Goal)</label>
+          <div class="input-wrapper">
+            <span class="input-icon">🏝️</span>
+            <input type="text" id="createSprintGoal" placeholder="Ej: Publicar la versión inicial y validar con usuarios reales" value="¡Entregar valor continuo con calidad y foco en el equipo!">
+          </div>
+        </div>
+
+        <div class="input-group">
+          <label>Color de tu Avatar</label>
+          <div class="avatar-color-picker" id="createColorPicker"></div>
+        </div>
+
+        <button type="submit" class="btn btn-accent btn-block btn-lg" id="btnSubmitCreate">
+          <span>Crear Sala y Zarpar ⛵</span>
+        </button>
+      </form>
+
+      <div class="lobby-footer">
+        <div class="feature-pills">
+          <span>✨ 100% Gratis</span>
+          <span>⚡ Multiplayer en Vivo</span>
+          <span>💾 Guarda Sprints</span>
+          <span>🔒 Acceso Privado</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==========================================
+       PANTALLA 2: EL TABLERO MULTIPLAYER
+       ========================================== -->
+  <div id="boardScreen" class="board-screen hidden">
+
+    <!-- HEADER / BARRA SUPERIOR -->
+    <header class="board-header">
+      <div class="header-left">
+        <div class="brand-chip" title="SailBoat Scrum">
+          <img src="assets/sailboat_logo.jpg" alt="Logo" class="chip-logo">
+          <div class="chip-info">
+            <div class="chip-title">SailBoat Retro</div>
+            <div class="chip-sprint-name" id="headerSprintName">Sprint 1</div>
+          </div>
+        </div>
+
+        <!-- Selector de Sprints (Permite cambiar de un sprint a otro) -->
+        <div class="sprint-dropdown-container">
+          <button id="btnSprintMenu" class="btn-sprint-select" type="button" aria-expanded="false">
+            <span class="sprint-icon">⛵</span>
+            <span id="currentSprintBadgeLabel">Sprint 1</span>
+            <span class="dropdown-chevron">▼</span>
+          </button>
+
+          <div id="sprintDropdownMenu" class="dropdown-popover hidden">
+            <div class="dropdown-header">
+              <span class="dropdown-title">Historial de Sprints</span>
+              <button id="btnOpenNewSprintModal" class="btn btn-xs btn-primary">+ Nuevo Sprint</button>
+            </div>
+            <div id="sprintListItems" class="sprint-list">
+              <!-- Renderizado dinámicamente -->
+            </div>
+            <div class="dropdown-footer">
+              <button id="btnExportAllSprints" class="btn-link-action">💾 Exportar respaldo (.json)</button>
+              <button id="btnImportSprintBackup" class="btn-link-action">📥 Restaurar respaldo</button>
+              <input type="file" id="backupFileInput" accept=".json" class="hidden">
+            </div>
+          </div>
+        </div>
+
+        <!-- Código de Sala con botón de copiar invitación -->
+        <div class="room-pill-wrapper">
+          <div class="room-pill" id="roomCodeDisplay">
+            <span class="room-label">Sala:</span>
+            <strong id="currentRoomCodeLabel">---</strong>
+            <button id="btnCopyInvite" class="btn-copy-chip" title="Copiar enlace de invitación para el equipo">
+              <span class="copy-icon">🔗</span>
+              <span>Invitar</span>
+            </button>
+          </div>
+          <div id="copyNotification" class="copy-toast hidden">¡Enlace copiado al portapapeles! 📋</div>
+        </div>
+      </div>
+
+      <!-- CENTRO: TEMPORIZADOR Y MODO INCÓGNITO -->
+      <div class="header-center">
+        <!-- Temporizador Sincronizado -->
+        <div class="timer-widget" id="timerWidget">
+          <div class="timer-display" id="timerClock">05:00</div>
+          <div class="timer-controls">
+            <button id="btnTimerToggle" class="timer-btn" title="Iniciar / Pausar">▶️</button>
+            <button id="btnTimerReset" class="timer-btn" title="Reiniciar a 5 min">🔄</button>
+            <div class="timer-presets">
+              <button class="timer-preset-btn" data-min="3">3m</button>
+              <button class="timer-preset-btn active" data-min="5">5m</button>
+              <button class="timer-preset-btn" data-min="10">10m</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Botón Modo Incógnito (Ocultar notas para evitar sesgos) -->
+        <button id="btnToggleBlur" class="btn-pill-action" title="Ocultar notas de los demás mientras escriben">
+          <span class="action-icon" id="blurIcon">👁️</span>
+          <span id="blurLabel">Ocultar notas</span>
+        </button>
+      </div>
+
+      <!-- DERECHA: HERRAMIENTAS, PARTICIPANTES, EXPORTAR -->
+      <div class="header-right">
+        <!-- Lista de Presencia (Avatares en línea) -->
+        <div class="presence-bar" id="presenceBar" title="Compañeros en línea">
+          <!-- Avatares dinámicos -->
+        </div>
+
+        <!-- Botón Guía de Facilitación (¡Súper útil para su primera retro!) -->
+        <button id="btnOpenGuide" class="btn btn-secondary btn-sm" title="Guía paso a paso para liderar la retro">
+          <span class="btn-icon">🧭</span>
+          <span class="btn-text">Guía Facilitador</span>
+        </button>
+
+        <!-- Botón Plan de Acción / Compromisos -->
+        <button id="btnOpenActionItems" class="btn btn-secondary btn-sm" title="Compromisos y acuerdos del equipo">
+          <span class="btn-icon">📋</span>
+          <span class="btn-text">Acuerdos</span>
+          <span class="badge-count" id="actionItemsCount">0</span>
+        </button>
+
+        <!-- Botón Exportar Resumen -->
+        <button id="btnOpenExportModal" class="btn btn-secondary btn-sm" title="Descargar resumen o imagen de la retro">
+          <span class="btn-icon">📊</span>
+          <span class="btn-text">Exportar</span>
+        </button>
+
+        <!-- Botón Sonido On/Off -->
+        <button id="btnToggleSound" class="btn-icon-round" title="Activar/Silenciar efectos de sonido">
+          <span id="soundIcon">🔊</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- BANNER DEL SPRINT GOAL (EDITABLE) -->
+    <div class="sprint-goal-strip">
+      <div class="goal-label">🏝️ META DEL SPRINT:</div>
+      <div class="goal-text-container">
+        <span id="displaySprintGoal" class="goal-text">¡Entregar valor continuo con calidad y foco en el equipo!</span>
+        <button id="btnEditSprintGoal" class="btn-edit-inline" title="Editar objetivo del sprint">✏️</button>
+      </div>
+      <div class="quick-reactions">
+        <span class="reactions-title">Reaccionar:</span>
+        <button class="btn-reaction" data-emoji="🎉" title="Celebrar">🎉</button>
+        <button class="btn-reaction" data-emoji="🚀" title="¡Acelerando!">🚀</button>
+        <button class="btn-reaction" data-emoji="❤️" title="Amor de equipo">❤️</button>
+        <button class="btn-reaction" data-emoji="👏" title="Aplausos">👏</button>
+        <button class="btn-reaction" data-emoji="💡" title="¡Gran idea!">💡</button>
+        <button class="btn-reaction" data-emoji="⚓" title="Atentos al ancla">⚓</button>
+      </div>
+    </div>
+
+    <!-- ÁREA PRINCIPAL DEL TABLERO (CANVAS INTERACTIVO) -->
+    <main class="board-canvas-viewport" id="canvasViewport">
+      <div class="board-canvas-stage" id="canvasStage">
+        <!-- Imagen de Fondo Temática del Velero -->
+        <img src="assets/sailboat_board_clean.jpg" alt="Fondo Sailboat Scrum" class="board-bg-img" id="boardBgImage" draggable="false">
+
+        <!-- OVERLAYS DE ZONAS (Con títulos, descripciones y botón + rápido) -->
+        <div class="retro-zone-overlay zone-wind" data-zone="wind">
+          <div class="zone-badge">
+            <span class="zone-icon">💨</span>
+            <div class="zone-meta">
+              <h2 class="zone-title">VIENTO</h2>
+              <p class="zone-desc">¿Qué nos impulsó y ayudó a avanzar?</p>
+            </div>
+            <button class="btn-quick-add" data-zone="wind" title="Agregar post-it en Viento">+ Nota</button>
+          </div>
+          <div class="zone-count-badge" id="count_wind">0 notas</div>
+        </div>
+
+        <div class="retro-zone-overlay zone-sun" data-zone="sun">
+          <div class="zone-badge">
+            <span class="zone-icon">☀️</span>
+            <div class="zone-meta">
+              <h2 class="zone-title">SOL</h2>
+              <p class="zone-desc">¿Qué nos hizo sentir bien y celebramos?</p>
+            </div>
+            <button class="btn-quick-add" data-zone="sun" title="Agregar post-it en Sol">+ Nota</button>
+          </div>
+          <div class="zone-count-badge" id="count_sun">0 notas</div>
+        </div>
+
+        <div class="retro-zone-overlay zone-boat" data-zone="boat">
+          <div class="zone-badge badge-boat">
+            <span class="zone-icon">⛵</span>
+            <div class="zone-meta">
+              <h2 class="zone-title">NUESTRO VELERO</h2>
+              <p class="zone-desc">El equipo navegando juntos</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="retro-zone-overlay zone-anchor" data-zone="anchor">
+          <div class="zone-badge">
+            <span class="zone-icon">⚓</span>
+            <div class="zone-meta">
+              <h2 class="zone-title">ANCLA</h2>
+              <p class="zone-desc">¿Qué nos frenó, bloqueó o causó fricción?</p>
+            </div>
+            <button class="btn-quick-add" data-zone="anchor" title="Agregar post-it en Ancla">+ Nota</button>
+          </div>
+          <div class="zone-count-badge" id="count_anchor">0 notas</div>
+        </div>
+
+        <div class="retro-zone-overlay zone-reef" data-zone="reef">
+          <div class="zone-badge">
+            <span class="zone-icon">🪨</span>
+            <div class="zone-meta">
+              <h2 class="zone-title">ARRECIFE</h2>
+              <p class="zone-desc">¿Qué riesgos futuros vemos en el camino?</p>
+            </div>
+            <button class="btn-quick-add" data-zone="reef" title="Agregar post-it en Arrecife">+ Nota</button>
+          </div>
+          <div class="zone-count-badge" id="count_reef">0 notas</div>
+        </div>
+
+        <div class="retro-zone-overlay zone-goal" data-zone="goal">
+          <div class="zone-badge badge-island">
+            <span class="zone-icon">🏝️</span>
+            <div class="zone-meta">
+              <h2 class="zone-title">DESTINO</h2>
+              <p class="zone-desc">Meta y acuerdos de llegada</p>
+            </div>
+            <button class="btn-quick-add" data-zone="goal" title="Agregar nota en Destino">+ Nota</button>
+          </div>
+          <div class="zone-count-badge" id="count_goal">0 notas</div>
+        </div>
+
+        <!-- CAPA DE POST-ITS / NOTAS ADHESIVAS -->
+        <div class="notes-container" id="notesContainer">
+          <!-- Renderizado dinámicamente -->
+        </div>
+
+        <!-- CAPA DE CURSORES MULTIPLAYER -->
+        <div class="cursors-container" id="cursorsContainer">
+          <!-- Renderizado dinámicamente -->
+        </div>
+
+        <!-- CAPA DE REACCIONES FLOTANTES -->
+        <div class="reactions-container" id="reactionsContainer">
+          <!-- Emojis flotantes -->
+        </div>
+      </div>
+    </main>
+
+    <!-- BARRA FLOTANTE DE HERRAMIENTAS INFERIOR -->
+    <footer class="board-floating-toolbar">
+      <div class="toolbar-left">
+        <span class="tool-label">Color:</span>
+        <div class="color-palette" id="noteColorPalette">
+          <button class="color-dot active" data-color="yellow" style="background:#fff385;" title="Amarillo"></button>
+          <button class="color-dot" data-color="green" style="background:#c8f7c5;" title="Verde menta"></button>
+          <button class="color-dot" data-color="blue" style="background:#c5e8f7;" title="Celeste mar"></button>
+          <button class="color-dot" data-color="pink" style="background:#ffd1dc;" title="Rosa coral"></button>
+          <button class="color-dot" data-color="orange" style="background:#ffe0b2;" title="Naranja cálido"></button>
+          <button class="color-dot" data-color="purple" style="background:#e1bee7;" title="Lavanda"></button>
+        </div>
+      </div>
+
+      <div class="toolbar-center">
+        <button id="btnCreateNewNote" class="btn btn-primary btn-round-tool">
+          <span class="btn-icon">➕</span>
+          <span>Crear Post-it</span>
+        </button>
+        <span class="hint-shortcut">(o haz doble clic en cualquier lugar del mapa)</span>
+      </div>
+
+      <div class="toolbar-right">
+        <!-- Controles de Zoom -->
+        <div class="zoom-controls">
+          <button id="btnZoomOut" class="btn-zoom" title="Alejar">-</button>
+          <span id="zoomLevelDisplay" class="zoom-text">100%</span>
+          <button id="btnZoomIn" class="btn-zoom" title="Acercar">+</button>
+          <button id="btnZoomReset" class="btn-zoom-reset" title="Restablecer vista">Centrar</button>
+        </div>
+      </div>
+    </footer>
+
+  </div>
+
+  <!-- ==========================================
+       DRAWER: GUÍA PASO A PASO DEL FACILITADOR
+       (Especialmente diseñada para la primera retro del usuario)
+       ========================================== -->
+  <aside id="facilitatorDrawer" class="drawer drawer-right hidden">
+    <div class="drawer-header">
+      <div class="drawer-title-group">
+        <span class="drawer-icon">🧭</span>
+        <div>
+          <h3 class="drawer-title">Guía para Facilitar tu Retrospectiva</h3>
+          <p class="drawer-subtitle">Estrategia SailBoat paso a paso para guiar a tu equipo con éxito</p>
+        </div>
+      </div>
+      <button class="btn-close-drawer" id="btnCloseGuide">✕</button>
+    </div>
+
+    <div class="drawer-body">
+      <div class="guide-welcome-box">
+        <h4>¡Bienvenido a tu primera retro! 🎉</h4>
+        <p>No te preocupes si es tu primera vez liderando. La dinámica del <strong>SailBoat (Velero)</strong> es una de las más visuales, participativas y amenas de Scrum. Sigue estos 5 pasos recomendados:</p>
+      </div>
+
+      <div class="facilitation-steps-timeline">
+        <!-- Paso 1 -->
+        <div class="step-card active">
+          <div class="step-header">
+            <span class="step-number">1</span>
+            <div class="step-title-meta">
+              <h5>Apertura y Metáfora (5 min)</h5>
+              <span class="step-badge">Fijar el contexto</span>
+            </div>
+            <button class="btn-timer-shortcut" data-minutes="5" title="Poner temporizador en 5 min">⏱️ 5m</button>
+          </div>
+          <p class="step-text">
+            Dales la bienvenida al equipo. Explica que el barco representa al equipo dirigiéndose hacia su destino (el Sprint Goal).
+          </p>
+          <div class="step-tip">
+            <strong>Frase sugerida:</strong> "Hoy vamos a reflexionar sobre qué nos empuja, qué nos frena y qué rocas vemos por delante para mejorar en el próximo sprint."
+          </div>
+        </div>
+
+        <!-- Paso 2 -->
+        <div class="step-card">
+          <div class="step-header">
+            <span class="step-number">2</span>
+            <div class="step-title-meta">
+              <h5>Escritura en Silencio (7 min)</h5>
+              <span class="step-badge">Evitar sesgos</span>
+            </div>
+            <button class="btn-timer-shortcut" data-minutes="7" title="Poner temporizador en 7 min">⏱️ 7m</button>
+          </div>
+          <p class="step-text">
+            Pide al equipo que escriba sus post-its en los 4 cuadrantes. Activa el botón <strong>"Ocultar notas"</strong> para que nadie se condicione leyendo lo que otros ponen antes de terminar.
+          </p>
+          <button id="btnGuideToggleBlur" class="btn btn-secondary btn-sm">👁️ Activar Modo Ocultar Notas</button>
+        </div>
+
+        <!-- Paso 3 -->
+        <div class="step-card">
+          <div class="step-header">
+            <span class="step-number">3</span>
+            <div class="step-title-meta">
+              <h5>Lectura y Agrupación (15 min)</h5>
+              <span class="step-badge">Construir entendimiento</span>
+            </div>
+            <button class="btn-timer-shortcut" data-minutes="15" title="Poner temporizador en 15 min">⏱️ 15m</button>
+          </div>
+          <p class="step-text">
+            Haz clic en <strong>"Revelar notas"</strong>. Repasa cada cuadrante en orden:
+          </p>
+          <ul class="guide-order-list">
+            <li>💨 <strong>Viento:</strong> Lo positivo y lo que funcionó.</li>
+            <li>☀️ <strong>Sol:</strong> Agradecimientos personales y celebraciones.</li>
+            <li>⚓ <strong>Ancla:</strong> Lo que dolió, trabó o frustró (¡con foco constructivo!).</li>
+            <li>🪨 <strong>Arrecife:</strong> Riesgos a anticipar.</li>
+          </ul>
+        </div>
+
+        <!-- Paso 4 -->
+        <div class="step-card">
+          <div class="step-header">
+            <span class="step-number">4</span>
+            <div class="step-title-meta">
+              <h5>Votación de Temas Críticos (5 min)</h5>
+              <span class="step-badge">Dot Voting</span>
+            </div>
+            <button class="btn-timer-shortcut" data-minutes="5" title="Poner temporizador en 5 min">⏱️ 5m</button>
+          </div>
+          <p class="step-text">
+            Pide a cada miembro que dé <strong>2 o 3 votos (❤️)</strong> a las notas de Ancla o Arrecife que consideren más prioritarias resolver.
+          </p>
+        </div>
+
+        <!-- Paso 5 -->
+        <div class="step-card">
+          <div class="step-header">
+            <span class="step-number">5</span>
+            <div class="step-title-meta">
+              <h5>Plan de Acción y Acuerdos (10 min)</h5>
+              <span class="step-badge">Compromisos SMART</span>
+            </div>
+            <button class="btn-timer-shortcut" data-minutes="10" title="Poner temporizador en 10 min">⏱️ 10m</button>
+          </div>
+          <p class="step-text">
+            Para las 2 o 3 anclas más votadas, definan acciones concretas con un responsable claro y anótenlas en la sección de <strong>Acuerdos</strong>.
+          </p>
+          <button id="btnGuideOpenActions" class="btn btn-primary btn-sm">📋 Abrir Panel de Acuerdos</button>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ==========================================
+       DRAWER: PLAN DE ACCIÓN Y COMPROMISOS
+       ========================================== -->
+  <aside id="actionItemsDrawer" class="drawer drawer-right hidden">
+    <div class="drawer-header">
+      <div class="drawer-title-group">
+        <span class="drawer-icon">📋</span>
+        <div>
+          <h3 class="drawer-title">Plan de Acción del Sprint</h3>
+          <p class="drawer-subtitle">Acuerdos concretos para levantar las anclas y sortear los arrecifes</p>
+        </div>
+      </div>
+      <button class="btn-close-drawer" id="btnCloseActions">✕</button>
+    </div>
+
+    <div class="drawer-body">
+      <!-- Formulario para agregar nuevo acuerdo -->
+      <form id="newActionForm" class="new-action-box">
+        <div class="input-group">
+          <label for="newActionText">¿Qué compromiso asume el equipo?</label>
+          <textarea id="newActionText" rows="2" placeholder="Ej: Reducir los tiempos de CI implementando caché de dependencias" required></textarea>
+        </div>
+        <div class="grid-2-col">
+          <div class="input-group">
+            <label for="newActionOwner">Responsable</label>
+            <input type="text" id="newActionOwner" placeholder="Ej: Luigi / Tech Lead" required>
+          </div>
+          <div class="input-group submit-action-group">
+            <label>&nbsp;</label>
+            <button type="submit" class="btn btn-primary btn-block">Agregar Acuerdo</button>
+          </div>
+        </div>
+      </form>
+
+      <!-- Lista de Acuerdos -->
+      <div class="actions-list-container">
+        <div class="actions-list-header">
+          <span>Compromisos Registrados</span>
+          <span id="actionsPendingBadge" class="badge-pending">0 pendientes</span>
+        </div>
+        <div id="actionItemsList" class="actions-items-list">
+          <!-- Renderizado dinámicamente -->
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ==========================================
+       MODAL: CREAR NUEVO SPRINT (GUARDAR Y CONTINUAR)
+       ========================================== -->
+  <div id="newSprintModal" class="modal-backdrop hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-title-group">
+          <span class="modal-icon">⛵</span>
+          <h3 class="modal-title">Iniciar Nuevo Sprint</h3>
+        </div>
+        <button class="btn-close-modal" id="btnCloseNewSprintModal">✕</button>
+      </div>
+      <form id="createNewSprintForm" class="modal-body">
+        <p class="modal-description">
+          El sprint actual se guardará en el historial para consultas futuras y se abrirá un nuevo tablero limpio para el próximo ciclo.
+        </p>
+
+        <div class="input-group">
+          <label for="modalNewSprintName">Nombre del Nuevo Sprint</label>
+          <input type="text" id="modalNewSprintName" placeholder="Ej: Sprint 2 - Optimización y Nuevas Features" required>
+        </div>
+
+        <div class="input-group">
+          <label for="modalNewSprintGoal">Objetivo del Sprint (Sprint Goal)</label>
+          <input type="text" id="modalNewSprintGoal" placeholder="Ej: Mejorar la velocidad de carga y añadir notificaciones push" required>
+        </div>
+
+        <div class="checkbox-group">
+          <label class="checkbox-label">
+            <input type="checkbox" id="modalCarryActionsCheckbox" checked>
+            <span>Migrar acuerdos pendientes del sprint anterior al nuevo sprint</span>
+          </label>
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" class="btn btn-secondary" id="btnCancelNewSprint">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Crear y Zarpar al Nuevo Sprint</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ==========================================
+       MODAL: EXPORTAR RESUMEN (JIRA, SLACK, PDF, PNG)
+       ========================================== -->
+  <div id="exportModal" class="modal-backdrop hidden">
+    <div class="modal-card modal-lg">
+      <div class="modal-header">
+        <div class="modal-title-group">
+          <span class="modal-icon">📊</span>
+          <h3 class="modal-title">Exportar Resultados de la Retrospectiva</h3>
+        </div>
+        <button class="btn-close-modal" id="btnCloseExportModal">✕</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="export-options-grid">
+          <button id="btnDownloadBoardPng" class="export-card-btn">
+            <span class="export-card-icon">📸</span>
+            <strong>Descargar Imagen (PNG)</strong>
+            <p>Captura visual de alta calidad del tablero con todos los post-its.</p>
+          </button>
+
+          <button id="btnCopyMarkdownSummary" class="export-card-btn">
+            <span class="export-card-icon">📝</span>
+            <strong>Copiar Resumen Markdown</strong>
+            <p>Formato listo para pegar en Jira, Confluence, Slack o Notion.</p>
+          </button>
+
+          <button id="btnDownloadJsonBackup" class="export-card-btn">
+            <span class="export-card-icon">💾</span>
+            <strong>Descargar Archivo JSON</strong>
+            <p>Copia de seguridad completa con todos los sprints de la sala.</p>
+          </button>
+        </div>
+
+        <div class="markdown-preview-box">
+          <div class="preview-header">
+            <span>Vista Previa del Informe Markdown:</span>
+            <button id="btnCopyPreviewText" class="btn btn-xs btn-secondary">Copiar Texto</button>
+          </div>
+          <pre id="markdownPreviewText" class="code-preview"></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==========================================
+       MODAL: CREAR POST-IT (REEMPLAZA PROMPT NATIVO)
+       ========================================== -->
+  <div id="addNoteModal" class="modal-backdrop hidden">
+    <div class="modal-card modal-sm">
+      <div class="modal-header">
+        <div class="modal-title-group">
+          <span class="modal-icon" id="addNoteModalIcon">💨</span>
+          <h4 class="modal-title" id="addNoteModalTitle">Nuevo Post-it</h4>
+        </div>
+        <button class="btn-close-modal" id="btnCloseAddNoteModal">✕</button>
+      </div>
+      <form id="addNoteForm" class="modal-body">
+        <input type="hidden" id="addNoteZone">
+        <input type="hidden" id="addNoteX">
+        <input type="hidden" id="addNoteY">
+        
+        <p class="modal-description" id="addNoteModalQuestion">¿Qué nos impulsó y ayudó a avanzar?</p>
+
+        <div class="input-group">
+          <label for="addNoteTextInput">Contenido de la nota</label>
+          <textarea id="addNoteTextInput" rows="4" placeholder="Escribe tu reflexión aquí..." required></textarea>
+        </div>
+
+        <div class="input-group">
+          <label>Color del Post-it</label>
+          <div class="color-palette" id="addNoteColorPalette">
+            <button type="button" class="color-dot active" data-color="yellow" style="background:#fff385;" title="Amarillo"></button>
+            <button type="button" class="color-dot" data-color="green" style="background:#c8f7c5;" title="Verde"></button>
+            <button type="button" class="color-dot" data-color="blue" style="background:#c5e8f7;" title="Azul"></button>
+            <button type="button" class="color-dot" data-color="pink" style="background:#ffd1dc;" title="Rosa"></button>
+            <button type="button" class="color-dot" data-color="orange" style="background:#ffe0b2;" title="Naranja"></button>
+            <button type="button" class="color-dot" data-color="purple" style="background:#e1bee7;" title="Lavanda"></button>
+          </div>
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" class="btn btn-secondary" id="btnCancelAddNote">Cancelar</button>
+          <button type="submit" class="btn btn-primary" id="btnSubmitAddNote">Pegar en el Tablero 📌</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ==========================================
+       MODAL: EDITAR POST-IT
+       ========================================== -->
+  <div id="editNoteModal" class="modal-backdrop hidden">
+    <div class="modal-card modal-sm">
+      <div class="modal-header">
+        <h4 class="modal-title">Editar Nota</h4>
+        <button class="btn-close-modal" id="btnCloseEditNoteModal">✕</button>
+      </div>
+      <form id="editNoteForm" class="modal-body">
+        <input type="hidden" id="editNoteId">
+        <div class="input-group">
+          <label for="editNoteText">Contenido</label>
+          <textarea id="editNoteText" rows="4" required></textarea>
+        </div>
+        <div class="input-group">
+          <label>Zona</label>
+          <select id="editNoteZone" class="select-control">
+            <option value="wind">💨 Viento (Lo que nos impulsó)</option>
+            <option value="sun">☀️ Sol (Lo que nos hizo sentir bien)</option>
+            <option value="anchor">⚓ Ancla (Lo que nos frenó)</option>
+            <option value="reef">🪨 Arrecife (Riesgos a futuro)</option>
+            <option value="goal">🏝️ Destino (Meta del Sprint)</option>
+          </select>
+        </div>
+        <div class="input-group">
+          <label>Color</label>
+          <div class="color-palette" id="editNoteColorPalette">
+            <button type="button" class="color-dot" data-color="yellow" style="background:#fff385;"></button>
+            <button type="button" class="color-dot" data-color="green" style="background:#c8f7c5;"></button>
+            <button type="button" class="color-dot" data-color="blue" style="background:#c5e8f7;"></button>
+            <button type="button" class="color-dot" data-color="pink" style="background:#ffd1dc;"></button>
+            <button type="button" class="color-dot" data-color="orange" style="background:#ffe0b2;"></button>
+            <button type="button" class="color-dot" data-color="purple" style="background:#e1bee7;"></button>
+          </div>
+        </div>
+        <div class="modal-actions space-between">
+          <button type="button" class="btn btn-danger-outline" id="btnDeleteNoteModal">🗑️ Eliminar</button>
+          <button type="submit" class="btn btn-primary">Guardar Cambios</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Scripts Modulares -->
+  <script src="js/audio.js"></script>
+  <script src="js/multiplayer.js"></script>
+  <script src="js/board.js"></script>
+  <script src="js/sprints.js"></script>
+  <script src="js/facilitator.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
