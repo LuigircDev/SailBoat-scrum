@@ -39,7 +39,7 @@ class MultiplayerClient {
     // 1. Intentar conectar vía Socket.io si la librería está disponible
     if (typeof io !== 'undefined') {
       try {
-        const socketUrl = window.location.origin.startsWith('http') ? window.location.origin : 'http://localhost:3000';
+        const socketUrl = window.SOCKET_SERVER_URL || (window.location.origin.startsWith('http') ? window.location.origin : 'http://localhost:3000');
         this.socket = io(socketUrl, {
           timeout: 4000,
           transports: ['websocket', 'polling']
